@@ -1,0 +1,14 @@
+[package]
+name = "copyota"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aes-gcm = "0.11"
+base64 = "0.23"
+getrandom = "0.4.3"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSImage", "NSPasteboard"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSString"] }
+qrcode = { version = "0.14", default-features = false }
+tungstenite = { version = "0.30", features = ["native-tls"] }
