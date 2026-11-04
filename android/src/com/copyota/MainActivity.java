@@ -18,7 +18,8 @@ import android.widget.Toast;
 
 // Receives the copyota://pair link from the pairing QR page and shows the two setup steps.
 public class MainActivity extends Activity {
-    static final RenderEffect BLUR = RenderEffect.createBlurEffect(8, 8, Shader.TileMode.CLAMP);
+    static final java.util.Random RANDOM = new java.util.Random();
+    static final RenderEffect BLUR = RenderEffect.createBlurEffect(16, 16, Shader.TileMode.CLAMP);
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -59,16 +60,24 @@ public class MainActivity extends Activity {
         TextView link = findViewById(R.id.pair).findViewById(R.id.link);
         link.setVisibility(relay == null ? View.GONE : View.VISIBLE);
         if (relay != null) {
-            link.setText(Uri.parse(relay).getHost());
-            link.setRenderEffect(BLUR);
+            String host = Uri.parse(relay).getHost();
             link.setActivated(false); // activated = revealed
+            hide(link, host);
             link.setOnClickListener(v -> {
                 v.setActivated(!v.isActivated());
-                v.setRenderEffect(v.isActivated() ? null : BLUR);
+                if (v.isActivated()) { link.setText(host); link.setRenderEffect(null); } else hide(link, host);
             });
         }
         step(R.id.service, 2, "Turn on Copyota", running,
                 running ? "Watching for copies." : "Switch it on in Settings > Accessibility > Copyota.");
+    }
+
+    // Blurred state shows random characters of the same length, so the blur alone never has to hide the real text.
+    void hide(TextView link, String host) {
+        StringBuilder junk = new StringBuilder();
+        for (int i = 0; i < host.length(); i++) junk.append("abcdefghijklmnopqrstuvwxyz0123456789".charAt(RANDOM.nextInt(36)));
+        link.setText(junk);
+        link.setRenderEffect(BLUR);
     }
 
     void step(int id, int number, String title, boolean done, String text) {
