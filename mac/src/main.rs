@@ -317,12 +317,14 @@ fn pair() {
     println!("\nStep 3: pair your phone.");
     println!("  a. Install the Copyota app on it: {APK_URL}");
     println!("  b. Scan this code with the phone's camera, open the link, and tap Open Copyota.\n");
-    for line in qr_lines(&format!("{url}/pair#room={room}&key={key}")) {
+    let link = format!("{url}/pair#room={room}&key={key}");
+    for line in qr_lines(&link) {
         println!("{line}");
     }
+    println!("\n     Can't scan it? In the app, tap Enter pairing link and paste this:\n     {link}");
     println!("\n  c. In Settings > Accessibility > Copyota, turn the service on. If Android says the setting");
     println!("     is restricted, open Settings > Apps > Copyota, tap the ⋮ menu and choose Allow restricted settings.\n");
-    println!("The code holds your private key, so don't share it. Run copyota pair to show it again.");
+    println!("The code and link hold your private key, so don't share them. Run copyota pair to show them again.");
 }
 
 fn setup() {

@@ -22,5 +22,9 @@
         android:layout_marginTop="24dp" android:background="@drawable/button" android:clickable="true"
         android:focusable="true" android:gravity="center" android:text="Open accessibility settings"
         android:textColor="@color/on_primary" android:textSize="18sp" android:textFontWeight="700"/>
+    <TextView android:id="@+id/manual" android:layout_width="match_parent" android:layout_height="48dp"
+        android:layout_marginTop="8dp" android:clickable="true" android:focusable="true" android:gravity="center"
+        android:text="Enter pairing link" android:textColor="@color/on_surface_variant" android:textSize="16sp"
+        android:textFontWeight="700"/>
   </LinearLayout>
 </ScrollView>

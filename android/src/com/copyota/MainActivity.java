@@ -9,14 +9,17 @@ import android.graphics.Shader;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.InputType;
 import android.util.Base64;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.OvershootInterpolator;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
-// Receives the copyota://pair link from the pairing QR page and shows the two setup steps.
+// Receives the copyota://pair link from the pairing QR page, or the same link pasted by hand, and shows the two setup steps.
 public class MainActivity extends Activity {
     static final java.util.Random RANDOM = new java.util.Random();
     static final RenderEffect BLUR = RenderEffect.createBlurEffect(16, 16, Shader.TileMode.CLAMP);
@@ -34,17 +37,18 @@ public class MainActivity extends Activity {
                 v.animate().scaleX(1).scaleY(1).setDuration(350).setInterpolator(new OvershootInterpolator(3));
             return false;
         });
+        findViewById(R.id.manual).setOnClickListener(v -> askForLink());
         View hero = findViewById(R.id.hero);
         hero.setScaleX(.5f);
         hero.setScaleY(.5f);
         hero.setRotation(-40);
         hero.animate().scaleX(1).scaleY(1).rotation(0).setDuration(700).setInterpolator(new OvershootInterpolator(2));
-        offer(getIntent());
+        offer(getIntent().getData());
     }
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        offer(intent);
+        offer(intent.getData());
     }
 
     @Override protected void onResume() {
@@ -95,9 +99,29 @@ public class MainActivity extends Activity {
         ((TextView) card.findViewById(R.id.link)).setTextColor(t.getCurrentTextColor());
     }
 
+    // Takes the https://.../pair#room=...&key=... link that copyota pair prints, for when the QR can't be scanned.
+    void askForLink() {
+        EditText input = new EditText(this);
+        input.setHint("https://\u2026/pair#room=\u2026");
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setImeOptions(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING); // the link holds the private key
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Enter pairing link")
+                .setMessage("Run copyota pair on your Mac and paste the link it prints.")
+                .setPositiveButton("Continue", (d, w) -> {
+                    // Whitespace is stripped because a link copied from a terminal can arrive wrapped.
+                    Uri page = Uri.parse(input.getText().toString().replaceAll("\\s", ""));
+                    offer(Uri.parse("copyota://pair?url=" + Uri.encode(page.getScheme() + "://" + page.getHost()) + "&" + page.getEncodedFragment()));
+                })
+                .setNegativeButton("Cancel", null)
+                .create();
+        int side = (int) (24 * getResources().getDisplayMetrics().density);
+        dialog.setView(input, side, 0, side, 0);
+        dialog.show();
+    }
+
     // Any website can fire this link, so nothing is saved until the user confirms the relay.
-    void offer(Intent intent) {
-        Uri link = intent.getData();
+    void offer(Uri link) {
         if (link == null) return;
         String url = link.getQueryParameter("url"), room = link.getQueryParameter("room"), key = link.getQueryParameter("key");
         try {
@@ -110,7 +134,7 @@ public class MainActivity extends Activity {
         }
         new AlertDialog.Builder(this)
                 .setTitle("Send your copies to " + Uri.parse(url).getHost() + "?")
-                .setMessage("Only pair if you scanned this code from your own Mac.")
+                .setMessage("Only pair if this code came from your own Mac.")
                 .setPositiveButton("Pair", (d, w) -> {
                     getSharedPreferences(ClipService.PREFS, MODE_PRIVATE).edit()
                             .putString("url", url).putString("room", room).putString("key", key).apply();
