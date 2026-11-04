@@ -1,0 +1,110 @@
+#!/bin/bash
+# Usage: ./copyota setup | pair | uninstall | apk
+set -eu
+cd "$(dirname "$0")"
+LABEL=com.copyota
+PLIST=~/Library/LaunchAgents/$LABEL.plist
+CONFIG=~/.config/copyota/env
+BIN=$PWD/build/copyota-mac
+
+wrangler() { npx -y wrangler@4 "$@"; }
+
+# Guides the user through what wrangler needs, then deploys the relay to their own account.
+deploy() {
+  command -v npx >/dev/null || { echo "Node.js is needed to deploy the relay. Install it from https://nodejs.org, then run this again." >&2; exit 1; }
+  if ! wrangler whoami 2>&1 | grep -q "You are logged in"; then
+    echo "Step 1: sign in to Cloudflare. A free account is enough, and your browser will open."
+    wrangler login
+  fi
+  echo "Step 2: deploying the relay to your Cloudflare account."
+  echo "If wrangler asks you to pick a workers.dev subdomain, any name works."
+  local out=$(mktemp)
+  # wrangler appends one JSON line per event, the deploy event lists the Worker's URLs.
+  # Cloudflare sometimes says a Worker doesn't exist right after uploading it, so try a few times.
+  local try
+  for try in 1 2 3; do
+    (cd worker && WRANGLER_OUTPUT_FILE_PATH=$out wrangler deploy) && break
+    [ $try -lt 3 ] || exit 1
+    echo "Deploy failed, retrying in 10 seconds."
+    sleep 10
+  done
+  URL=$(grep -oE 'https://[A-Za-z0-9.-]+\.workers\.dev' "$out" | head -1 || true)
+  rm -f "$out"
+  [ -n "$URL" ] || { echo "wrangler didn't report a workers.dev URL, so the deploy may have failed" >&2; exit 1; }
+  sed -i '' '/^URL=/d' "$CONFIG"
+  echo "URL=$URL" >> "$CONFIG"
+}
+
+build() {
+  command -v swiftc >/dev/null || { echo "Install Xcode's command line tools with: xcode-select --install" >&2; exit 1; }
+  mkdir -p build
+  swiftc -O mac/main.swift -o "$BIN"
+}
+
+# Starts the Mac agent at login.
+install() {
+  mkdir -p ~/Library/LaunchAgents
+  cat > "$PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$LABEL</string>
+  <key>ProgramArguments</key><array><string>$BIN</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/copyota.log</string>
+  <key>StandardErrorPath</key><string>/tmp/copyota.log</string>
+</dict></plist>
+PLIST
+  launchctl bootout gui/$UID/$LABEL 2>/dev/null || true
+  launchctl bootstrap gui/$UID "$PLIST"
+}
+
+# The QR holds a link to this user's own relay. The key sits in the #fragment, so the relay never sees it.
+pair() {
+  [ -f "$CONFIG" ] && . "$CONFIG"
+  [ -n "${URL:-}" ] || { echo "not set up yet, run ./copyota setup" >&2; exit 1; }
+  [ -x "$BIN" ] || build
+  local key=$(printf %s "$KEY" | sed 's/+/%2B/g; s,/,%2F,g; s/=/%3D/g')
+  local link="$URL/pair#room=$ROOM&key=$key"
+  echo
+  echo "Step 3: pair your phone."
+  echo "  a. Install the Copyota app on it. Build the APK with ./copyota apk."
+  echo "  b. Scan this code with the phone's camera, open the link, and tap Open Copyota."
+  echo
+  "$BIN" qr "$link"
+  echo
+  echo "     Can't scan it? In the app, tap Enter pairing link and paste this:"
+  echo "     $link"
+  echo
+  echo "  c. In Settings > Accessibility > Copyota, turn the service on. If Android says the setting"
+  echo "     is restricted, open Settings > Apps > Copyota, tap the ⋮ menu and choose Allow restricted settings."
+  echo
+  echo "The code and link hold your private key, so don't share them. Run ./copyota pair to show them again."
+}
+
+setup() {
+  if [ ! -f "$CONFIG" ]; then
+    mkdir -p "$(dirname "$CONFIG")"
+    (umask 077; printf 'ROOM=%s\nKEY=%s\n' "$(openssl rand -hex 16)" "$(openssl rand -base64 32)" > "$CONFIG")
+  fi
+  . "$CONFIG"
+  deploy
+  build
+  install
+  pair
+}
+
+uninstall() {
+  launchctl bootout gui/$UID/$LABEL 2>/dev/null || true
+  rm -f "$PLIST"
+  echo "Mac agent stopped. Your key is still in $CONFIG."
+  echo "To remove the relay too, run: cd worker && npx wrangler@4 delete"
+}
+
+apk() { android/build.sh; }
+
+case ${1:-} in
+  setup|pair|uninstall|apk) "$1" ;;
+  *) echo "usage: $0 setup|pair|uninstall|apk" >&2; exit 1 ;;
+esac

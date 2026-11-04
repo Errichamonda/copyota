@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
         input.setImeOptions(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING); // the link holds the private key
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Enter pairing link")
-                .setMessage("Run copyota pair on your Mac and paste the link it prints.")
+                .setMessage("Run ./copyota pair on your Mac and paste the link it prints.")
                 .setPositiveButton("Continue", (d, w) -> {
                     // Whitespace is stripped because a link copied from a terminal can arrive wrapped.
                     Uri page = Uri.parse(input.getText().toString().replaceAll("\\s", ""));

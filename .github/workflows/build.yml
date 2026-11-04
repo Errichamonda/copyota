@@ -1,19 +1,9 @@
-# Checks pull requests on Linux. The Mac target is only type-checked, linking it needs Apple's SDK.
+# Builds the APK on pull requests. The Swift agent needs AppKit, so only a Mac can build it.
 name: Build
 on:
   pull_request:
 
 jobs:
-  mac:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: rustup target add aarch64-apple-darwin
-      - run: cargo test --locked
-        working-directory: mac
-      - run: cargo check --locked --target aarch64-apple-darwin
-        working-directory: mac
-
   apk:
     runs-on: ubuntu-latest
     steps:

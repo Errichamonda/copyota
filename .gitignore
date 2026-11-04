@@ -2,4 +2,3 @@
 build/
 worker/.wrangler/
 .DS_Store
-target/
