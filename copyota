@@ -1,46 +1,47 @@
 #!/bin/bash
-# Usage: ./copyota setup | build | install | uninstall
+# Usage: ./copyota setup | pair | uninstall | apk
 set -eu
 cd "$(dirname "$0")"
 LABEL=com.copyota
 PLIST=~/Library/LaunchAgents/$LABEL.plist
+CONFIG=~/.config/copyota/env
+BIN=$PWD/build/copyota-mac
 
-load_env() {
-  [ -f .env ] || (umask 077; printf 'ROOM=%s\nKEY=%s\n' "$(openssl rand -hex 16)" "$(openssl rand -base64 32)" > .env)
-  . ./.env
-}
+wrangler() { npx -y wrangler@4 "$@"; }
 
+# Guides the user through what wrangler needs, then deploys the relay to their own account.
 deploy() {
-  load_env
-  local url
-  url=$(cd worker && npx -y wrangler@4 deploy | tee /dev/stderr | grep -oE 'https://[^ ]+\.workers\.dev' | head -1)
-  [ -n "$url" ] || { echo "no workers.dev URL in wrangler's output" >&2; exit 1; }
-  sed -i '' '/^URL=/d' .env
-  echo "URL=$url" >> .env
+  command -v npx >/dev/null || { echo "Node.js is needed to deploy the relay. Install it from https://nodejs.org, then run this again." >&2; exit 1; }
+  if ! wrangler whoami 2>&1 | grep -q "You are logged in"; then
+    echo "Step 1: sign in to Cloudflare. A free account is enough, and your browser will open."
+    wrangler login
+  fi
+  echo "Step 2: deploying the relay to your Cloudflare account."
+  echo "If wrangler asks you to pick a workers.dev subdomain, any name works."
+  local out=$(mktemp)
+  # wrangler appends one JSON line per event, the deploy event lists the Worker's URLs.
+  # Cloudflare sometimes says a Worker doesn't exist right after uploading it, so try a few times.
+  local try
+  for try in 1 2 3; do
+    (cd worker && WRANGLER_OUTPUT_FILE_PATH=$out wrangler deploy) && break
+    [ $try -lt 3 ] || exit 1
+    echo "Deploy failed, retrying in 10 seconds."
+    sleep 10
+  done
+  URL=$(grep -oE 'https://[A-Za-z0-9.-]+\.workers\.dev' "$out" | head -1 || true)
+  rm -f "$out"
+  [ -n "$URL" ] || { echo "wrangler didn't report a workers.dev URL, so the deploy may have failed" >&2; exit 1; }
+  sed -i '' '/^URL=/d' "$CONFIG"
+  echo "URL=$URL" >> "$CONFIG"
 }
 
 build() {
-  load_env
-  [ -n "${URL:-}" ] || { echo "no relay URL yet, run ./copyota setup" >&2; exit 1; }
-  local sdk=${ANDROID_HOME:-~/Library/Android/sdk}
-  local jar=$(ls -d "$sdk"/platforms/android-* | sort -V | tail -1)/android.jar
-  local tools=$(ls -d "$sdk"/build-tools/* | sort -V | tail -1)
-  rm -rf build && mkdir -p build/gen/com/copyota build/classes
-
-  printf 'enum Config {\n  static let url = "%s"\n  static let room = "%s"\n  static let key = "%s"\n}\n' "$URL" "$ROOM" "$KEY" > build/Config.swift
-  swiftc -O mac/main.swift build/Config.swift -o build/copyota-mac
-
-  printf 'package com.copyota;\nclass Config {\n  static final String URL = "%s", ROOM = "%s", KEY = "%s";\n}\n' "$URL" "$ROOM" "$KEY" > build/gen/com/copyota/Config.java
-  "$tools/aapt2" compile --dir android/res -o build/res.zip
-  "$tools/aapt2" link -I "$jar" --manifest android/AndroidManifest.xml --java build/gen -o build/app.apk build/res.zip
-  javac -nowarn -Xlint:-options --release 8 -cp "$jar" -d build/classes $(find android/src build/gen -name '*.java')
-  "$tools/d8" --lib "$jar" --min-api 33 --output build $(find build/classes -name '*.class')
-  (cd build && zip -q app.apk classes.dex)
-  "$tools/zipalign" -f 4 build/app.apk build/aligned.apk
-  "$tools/apksigner" sign --ks ~/.android/debug.keystore --ks-pass pass:android --out build/copyota.apk build/aligned.apk
-  echo "built build/copyota.apk, it contains your key so don't share it"
+  command -v swiftc >/dev/null || { echo "Install Xcode's command line tools with: xcode-select --install" >&2; exit 1; }
+  mkdir -p build
+  swiftc -O mac/main.swift -o "$BIN"
 }
 
+# Starts the Mac agent at login.
 install() {
   mkdir -p ~/Library/LaunchAgents
   cat > "$PLIST" <<PLIST
@@ -48,7 +49,7 @@ install() {
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key><array><string>$PWD/build/copyota-mac</string></array>
+  <key>ProgramArguments</key><array><string>$BIN</string></array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>/tmp/copyota.log</string>
@@ -57,16 +58,63 @@ install() {
 PLIST
   launchctl bootout gui/$UID/$LABEL 2>/dev/null || true
   launchctl bootstrap gui/$UID "$PLIST"
-  echo "Mac side running"
+}
+
+# The QR holds a link to this user's own relay. The key sits in the #fragment, so the relay never sees it.
+pair() {
+  [ -f "$CONFIG" ] && . "$CONFIG"
+  [ -n "${URL:-}" ] || { echo "not set up yet, run ./copyota setup" >&2; exit 1; }
+  [ -x "$BIN" ] || build
+  local key=$(printf %s "$KEY" | sed 's/+/%2B/g; s,/,%2F,g; s/=/%3D/g')
+  echo
+  echo "Step 3: pair your phone."
+  echo "  a. Install the Copyota app on it. Build the APK with ./copyota apk."
+  echo "  b. Scan this code with the phone's camera, open the link, and tap Open Copyota."
+  echo
+  "$BIN" qr "$URL/pair#room=$ROOM&key=$key"
+  echo
+  echo "  c. In Settings > Accessibility > Copyota, turn the service on. If Android says the setting"
+  echo "     is restricted, open Settings > Apps > Copyota, tap the ⋮ menu and choose Allow restricted settings."
+  echo
+  echo "The code holds your private key, so don't share it. Run ./copyota pair to show it again."
+}
+
+setup() {
+  if [ ! -f "$CONFIG" ]; then
+    mkdir -p "$(dirname "$CONFIG")"
+    (umask 077; printf 'ROOM=%s\nKEY=%s\n' "$(openssl rand -hex 16)" "$(openssl rand -base64 32)" > "$CONFIG")
+  fi
+  . "$CONFIG"
+  deploy
+  build
+  install
+  pair
 }
 
 uninstall() {
   launchctl bootout gui/$UID/$LABEL 2>/dev/null || true
   rm -f "$PLIST"
+  echo "Mac agent stopped. Your key is still in $CONFIG."
+  echo "To remove the relay too, run: cd worker && npx wrangler@4 delete"
+}
+
+# The app has no key in it, so one APK works for everyone. Needs the Android SDK.
+apk() {
+  local sdk=${ANDROID_HOME:-~/Library/Android/sdk}
+  local jar=$(ls -d "$sdk"/platforms/android-* | sort -V | tail -1)/android.jar
+  local tools=$(ls -d "$sdk"/build-tools/* | sort -V | tail -1)
+  rm -rf build/apk && mkdir -p build/apk/gen build/apk/classes
+  "$tools/aapt2" compile --dir android/res -o build/apk/res.zip
+  "$tools/aapt2" link -I "$jar" --manifest android/AndroidManifest.xml --java build/apk/gen -o build/apk/app.apk build/apk/res.zip
+  javac -nowarn -Xlint:-options --release 8 -cp "$jar" -d build/apk/classes $(find android/src build/apk/gen -name '*.java')
+  "$tools/d8" --lib "$jar" --min-api 33 --output build/apk $(find build/apk/classes -name '*.class')
+  (cd build/apk && zip -q app.apk classes.dex)
+  "$tools/zipalign" -f 4 build/apk/app.apk build/apk/aligned.apk
+  "$tools/apksigner" sign --ks ~/.android/debug.keystore --ks-pass pass:android --out build/copyota.apk build/apk/aligned.apk
+  echo "built build/copyota.apk"
 }
 
 case ${1:-} in
-  setup) deploy; build; install ;;
-  build|install|uninstall) "$1" ;;
-  *) echo "usage: $0 setup|build|install|uninstall" >&2; exit 1 ;;
+  setup|pair|uninstall|apk) "$1" ;;
+  *) echo "usage: $0 setup|pair|uninstall|apk" >&2; exit 1 ;;
 esac

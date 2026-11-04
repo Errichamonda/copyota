@@ -18,9 +18,18 @@ export class Room extends DurableObject {
   }
 }
 
+// The pairing QR points here. Phone cameras open web links but not app links, so this page
+// hands the room and key to the app. They sit in the #fragment, which is never sent to the server.
+const PAIR_PAGE = `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Copyota</title><body style="font:18px system-ui;margin:2em"><h1>Pair Copyota</h1>
+<p><a id=a>Open Copyota</a></p><p>Install the Copyota app first if this does nothing.</p>
+<script>a.href="copyota://pair?url="+encodeURIComponent(location.origin)+"&"+location.hash.slice(1);location=a.href</script>`;
+
 export default {
   fetch(request, env) {
-    const room = new URL(request.url).pathname.slice(1);
+    const path = new URL(request.url).pathname;
+    if (path === "/pair") return new Response(PAIR_PAGE, { headers: { "content-type": "text/html;charset=utf-8" } });
+    const room = path.slice(1);
     if (!/^[0-9a-f]{32}$/.test(room)) return new Response(null, { status: 404 });
     return env.ROOM.get(env.ROOM.idFromName(room)).fetch(request);
   },

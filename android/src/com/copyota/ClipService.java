@@ -3,6 +3,7 @@ package com.copyota;
 import android.accessibilityservice.AccessibilityService;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.PixelFormat;
@@ -30,6 +31,7 @@ import javax.crypto.spec.SecretKeySpec;
 // that are cut off or hidden need a real read, which requires briefly holding window focus.
 public class ClipService extends AccessibilityService {
     static final String TAG = "copyota";
+    static final String PREFS = "pairing"; // url, room and key, saved by MainActivity
     static final String SYSTEM_UI = "com.android.systemui";
     static final String PREVIEW_ID = SYSTEM_UI + ":id/text_preview";
     static final String HIDDEN_ID = SYSTEM_UI + ":id/hidden_preview";
@@ -100,19 +102,25 @@ public class ClipService extends AccessibilityService {
 
     // ponytail: one attempt, a copy made with no network is dropped.
     void send(String text) {
+        SharedPreferences pairing = getSharedPreferences(PREFS, MODE_PRIVATE);
+        String relay = pairing.getString("url", null), room = pairing.getString("room", null), key = pairing.getString("key", null);
+        if (relay == null) {
+            Log.w(TAG, "not paired, dropping a copy");
+            return;
+        }
         new Thread(() -> {
             try {
                 byte[] nonce = new byte[12];
                 new SecureRandom().nextBytes(nonce);
                 Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
                 cipher.init(Cipher.ENCRYPT_MODE,
-                        new SecretKeySpec(Base64.decode(Config.KEY, Base64.DEFAULT), "AES"),
+                        new SecretKeySpec(Base64.decode(key, Base64.DEFAULT), "AES"),
                         new GCMParameterSpec(128, nonce));
                 ByteArrayOutputStream sealed = new ByteArrayOutputStream();
                 sealed.write(nonce);
                 sealed.write(cipher.doFinal(text.getBytes(StandardCharsets.UTF_8)));
 
-                HttpURLConnection http = (HttpURLConnection) new URL(Config.URL + "/" + Config.ROOM).openConnection();
+                HttpURLConnection http = (HttpURLConnection) new URL(relay + "/" + room).openConnection();
                 http.setRequestMethod("POST");
                 http.setDoOutput(true);
                 http.setConnectTimeout(10000);

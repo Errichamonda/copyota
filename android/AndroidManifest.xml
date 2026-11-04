@@ -3,6 +3,18 @@
   <uses-permission android:name="android.permission.INTERNET"/>
   <queries><package android:name="com.android.systemui"/></queries>
   <application android:label="Copyota" android:allowBackup="false">
+    <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="copyota" android:host="pair"/>
+      </intent-filter>
+    </activity>
     <service android:name=".ClipService" android:exported="true" android:label="Copyota"
         android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
       <intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter>
