@@ -8,29 +8,32 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Base64;
-import android.widget.Button;
-import android.widget.LinearLayout;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.animation.OvershootInterpolator;
 import android.widget.TextView;
 import android.widget.Toast;
 
-// Receives the copyota://pair link from the pairing QR page and shows whether this phone is paired.
+// Receives the copyota://pair link from the pairing QR page and shows the two setup steps.
 public class MainActivity extends Activity {
-    TextView status;
-
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        status = new TextView(this);
-        status.setTextSize(18);
-        Button settings = new Button(this);
-        settings.setText("Open accessibility settings");
+        setContentView(R.layout.main);
+        View settings = findViewById(R.id.settings);
         settings.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setFitsSystemWindows(true);
-        box.setPadding(48, 48, 48, 48);
-        box.addView(status);
-        box.addView(settings);
-        setContentView(box);
+        // Springy press: squash on touch, overshoot back on release.
+        settings.setOnTouchListener((v, e) -> {
+            int a = e.getAction();
+            if (a == MotionEvent.ACTION_DOWN) v.animate().scaleX(.95f).scaleY(.95f).setDuration(120).setInterpolator(null);
+            else if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL)
+                v.animate().scaleX(1).scaleY(1).setDuration(350).setInterpolator(new OvershootInterpolator(3));
+            return false;
+        });
+        View hero = findViewById(R.id.hero);
+        hero.setScaleX(.5f);
+        hero.setScaleY(.5f);
+        hero.setRotation(-40);
+        hero.animate().scaleX(1).scaleY(1).rotation(0).setDuration(700).setInterpolator(new OvershootInterpolator(2));
         offer(getIntent());
     }
 
@@ -42,9 +45,29 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         String relay = getSharedPreferences(ClipService.PREFS, MODE_PRIVATE).getString("url", null);
-        status.setText(relay == null
-                ? "Not paired. Run ./copyota setup on your Mac and scan its code with this phone's camera."
-                : "Paired with " + Uri.parse(relay).getHost() + ".\n\nTurn Copyota on in accessibility settings to start syncing copies.");
+        String on = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        boolean running = on != null && on.contains(getPackageName() + "/");
+        ((TextView) findViewById(R.id.tagline)).setText(relay != null && running
+                ? "Copy on your phone. Paste on your Mac." : "Two quick steps and you're syncing.");
+        step(R.id.pair, 1, "Pair with your Mac", relay != null,
+                relay == null ? "Run ./copyota setup on your Mac and scan its code with this phone's camera."
+                        : "Paired with " + Uri.parse(relay).getHost());
+        step(R.id.service, 2, "Turn on Copyota", running,
+                running ? "Watching for copies." : "Switch it on in Settings > Accessibility > Copyota.");
+    }
+
+    void step(int id, int number, String title, boolean done, String text) {
+        View card = findViewById(id);
+        card.setBackgroundResource(done ? R.drawable.card_done : R.drawable.card);
+        TextView badge = card.findViewById(R.id.badge);
+        badge.setBackgroundResource(done ? R.drawable.badge_done : R.drawable.badge);
+        badge.setText(done ? "\u2713" : String.valueOf(number));
+        badge.setTextColor(getColor(done ? R.color.on_primary : R.color.on_secondary_container));
+        TextView t = card.findViewById(R.id.title), d = card.findViewById(R.id.text);
+        t.setText(title);
+        d.setText(text);
+        t.setTextColor(getColor(done ? R.color.on_primary_container : R.color.on_surface));
+        d.setTextColor(getColor(done ? R.color.on_primary_container : R.color.on_surface_variant));
     }
 
     // Any website can fire this link, so nothing is saved until the user confirms the relay.

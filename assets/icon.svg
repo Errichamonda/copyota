@@ -1,4 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#4f46e5"/>
-  <text x="32" y="32" dy="0.35em" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="26" font-weight="600" fill="#ffffff">AC</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <rect width="108" height="108" rx="28" fill="#3DDC84"/>
+  <g transform="translate(0 3)">
+    <path d="M45 38L40 26M63 38L68 26" stroke="#7A4E2D" stroke-width="3.4" stroke-linecap="round"/>
+    <circle cx="30" cy="43" r="6" fill="#7A4E2D"/><circle cx="78" cy="43" r="6" fill="#7A4E2D"/>
+    <path fill="#A9744B" d="M26 68V56C26 41 38 32 54 32C70 32 82 41 82 56V68C82 74 78 78 72 78H36C30 78 26 74 26 68Z"/>
+    <path fill="#C79A6E" d="M34 66C34 58 42 55 54 55C66 55 74 58 74 66C74 73 68 78 54 78C40 78 34 73 34 66Z"/>
+    <ellipse cx="54" cy="58" rx="11" ry="6.2" fill="#3B2415"/>
+    <ellipse cx="49.5" cy="58" rx="2" ry="1.5" fill="#6B4630"/><ellipse cx="58.5" cy="58" rx="2" ry="1.5" fill="#6B4630"/>
+    <path d="M48 69Q54 73.5 60 69" stroke="#3B2415" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+    <circle cx="41" cy="50" r="3.1" fill="#2A1A10"/><circle cx="67" cy="50" r="3.1" fill="#2A1A10"/>
+    <circle cx="42" cy="49" r="1" fill="#fff"/><circle cx="68" cy="49" r="1" fill="#fff"/>
+  </g>
 </svg>
