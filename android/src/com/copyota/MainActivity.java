@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.RenderEffect;
+import android.graphics.Shader;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -16,6 +18,8 @@ import android.widget.Toast;
 
 // Receives the copyota://pair link from the pairing QR page and shows the two setup steps.
 public class MainActivity extends Activity {
+    static final RenderEffect BLUR = RenderEffect.createBlurEffect(8, 8, Shader.TileMode.CLAMP);
+
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(R.layout.main);
@@ -50,8 +54,19 @@ public class MainActivity extends Activity {
         ((TextView) findViewById(R.id.tagline)).setText(relay != null && running
                 ? "Copy on your phone. Paste on your Mac." : "Two quick steps and you're syncing.");
         step(R.id.pair, 1, "Pair with your Mac", relay != null,
-                relay == null ? "Run ./copyota setup on your Mac and scan its code with this phone's camera."
-                        : "Paired with " + Uri.parse(relay).getHost());
+                relay == null ? "Run ./copyota setup on your Mac and scan its code with this phone's camera." : "Paired with");
+        // The relay URL is private, so it starts blurred each time and a tap toggles it.
+        TextView link = findViewById(R.id.pair).findViewById(R.id.link);
+        link.setVisibility(relay == null ? View.GONE : View.VISIBLE);
+        if (relay != null) {
+            link.setText(Uri.parse(relay).getHost());
+            link.setRenderEffect(BLUR);
+            link.setActivated(false); // activated = revealed
+            link.setOnClickListener(v -> {
+                v.setActivated(!v.isActivated());
+                v.setRenderEffect(v.isActivated() ? null : BLUR);
+            });
+        }
         step(R.id.service, 2, "Turn on Copyota", running,
                 running ? "Watching for copies." : "Switch it on in Settings > Accessibility > Copyota.");
     }
@@ -68,6 +83,7 @@ public class MainActivity extends Activity {
         d.setText(text);
         t.setTextColor(getColor(done ? R.color.on_primary_container : R.color.on_surface));
         d.setTextColor(getColor(done ? R.color.on_primary_container : R.color.on_surface_variant));
+        ((TextView) card.findViewById(R.id.link)).setTextColor(t.getCurrentTextColor());
     }
 
     // Any website can fire this link, so nothing is saved until the user confirms the relay.
