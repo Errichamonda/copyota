@@ -1,7 +1,10 @@
-# Builds the APK on pull requests. The Swift agent needs AppKit, so only a Mac can build it.
+# Builds the APK on pull requests. Pushing a v* tag also publishes it as a release.
+# The Swift agent needs AppKit, so only a Mac can build it.
 name: Build
 on:
   pull_request:
+  push:
+    tags: ['v*']
 
 jobs:
   apk:
@@ -10,12 +13,26 @@ jobs:
       - uses: actions/checkout@v7
       - run: printenv ANDROID_KEYSTORE | base64 -d > "$RUNNER_TEMP/copyota.keystore"
         env:
-          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE }}
       - run: KEYSTORE="$RUNNER_TEMP/copyota.keystore" android/build.sh
         env:
-          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASS }}
       - uses: actions/upload-artifact@v7
         with:
           name: copyota.apk
           path: build/copyota.apk
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+      - run: gh release create "$GITHUB_REF_NAME" copyota.apk --repo "$GITHUB_REPOSITORY" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
