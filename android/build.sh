@@ -1,6 +1,6 @@
 #!/bin/bash
-# Builds build/copyota.apk. Needs the Android SDK and a JDK. Releases are built by CI, so only
-# work on the app needs this. The app has no key in it, so one APK works for everyone.
+# Builds build/copyota.apk. Needs the Android SDK and a JDK.
+# The app has no key in it, so one APK works for everyone.
 set -eu
 cd "$(dirname "$0")/.."
 export KEYSTORE_PASS=${KEYSTORE_PASS:-android}

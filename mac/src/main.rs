@@ -1,11 +1,6 @@
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
-use objc2::AnyThread;
-use objc2::rc::autoreleasepool;
-use objc2::runtime::ProtocolObject;
-use objc2_app_kit::{NSImage, NSPasteboard, NSPasteboardTypeString, NSPasteboardWriting};
-use objc2_foundation::{NSArray, NSData, NSString};
 use qrcode::{Color, EcLevel, QrCode};
 use std::collections::HashMap;
 use std::error::Error;
@@ -20,7 +15,6 @@ use std::time::{Duration, Instant};
 use tungstenite::Message;
 
 const LABEL: &str = "com.copyota";
-const APK_URL: &str = "https://github.com/Errichamonda/copyota/releases/latest/download/copyota.apk";
 const WORKER_JS: &str = include_str!("../../worker/index.js");
 const WORKER_TOML: &str = include_str!("../../worker/wrangler.toml");
 const IDLE: Duration = Duration::from_secs(20); // silence before a ping, and then before giving up
@@ -127,7 +121,14 @@ impl Inbox {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn paste(clip: Clip) {
+    use objc2::AnyThread;
+    use objc2::rc::autoreleasepool;
+    use objc2::runtime::ProtocolObject;
+    use objc2_app_kit::{NSImage, NSPasteboard, NSPasteboardTypeString, NSPasteboardWriting};
+    use objc2_foundation::{NSArray, NSData, NSString};
+
     autoreleasepool(|_| {
         let board = NSPasteboard::generalPasteboard();
         match clip {
@@ -146,6 +147,10 @@ fn paste(clip: Clip) {
         }
     });
 }
+
+// ponytail: the agent only runs on a Mac, this stub just lets the tests build on Linux CI.
+#[cfg(not(target_os = "macos"))]
+fn paste(_: Clip) {}
 
 // A sleeping Mac or a changed network leaves a dead socket that never errors,
 // so ping it after a quiet spell and drop it if nothing comes back.
@@ -315,14 +320,16 @@ fn pair() {
     };
     let key = key.replace('+', "%2B").replace('/', "%2F").replace('=', "%3D");
     println!("\nStep 3: pair your phone.");
-    println!("  a. Install the Copyota app on it: {APK_URL}");
+    println!("  a. Install the Copyota app on it. android/build.sh in the repo builds it.");
     println!("  b. Scan this code with the phone's camera, open the link, and tap Open Copyota.\n");
-    for line in qr_lines(&format!("{url}/pair#room={room}&key={key}")) {
+    let link = format!("{url}/pair#room={room}&key={key}");
+    for line in qr_lines(&link) {
         println!("{line}");
     }
+    println!("\n     Can't scan it? In the app, tap Enter pairing link and paste this:\n     {link}");
     println!("\n  c. In Settings > Accessibility > Copyota, turn the service on. If Android says the setting");
     println!("     is restricted, open Settings > Apps > Copyota, tap the ⋮ menu and choose Allow restricted settings.\n");
-    println!("The code holds your private key, so don't share it. Run copyota pair to show it again.");
+    println!("The code and link hold your private key, so don't share them. Run copyota pair to show them again.");
 }
 
 fn setup() {
