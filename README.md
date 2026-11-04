@@ -17,7 +17,7 @@ Android blocks background apps from reading the clipboard, so the app is an acce
 Everyone runs their own relay on their own free Cloudflare account, so installs never see each other. Needs Android 13+, and Node and Xcode's command line tools on the Mac.
 
 1. On the Mac, run `./copyota setup`. It walks you through signing in to Cloudflare with wrangler, deploys the relay, generates your private key, starts the Mac agent at login and shows a QR code.
-2. Install the Copyota app on the phone. `./copyota apk` builds `build/copyota.apk`, which needs the Android SDK and a JDK. The same APK works for everyone, it holds no key.
+2. Install the Copyota app on the phone. Download `copyota.apk` from [Releases](https://github.com/Errichamonda/copyota/releases), or build it with `./copyota apk`, which needs the Android SDK and a JDK and writes `build/copyota.apk`. The same APK works for everyone, it holds no key.
 3. Scan the QR code with the phone's camera, open the link, tap **Open Copyota** and confirm. If you can't scan it, tap **Enter pairing link** in the app and paste the link printed under the code. Run `./copyota pair` to show both again.
 4. On the phone, open Settings > Accessibility > Copyota and turn it on. If Android says the setting is restricted, open Settings > Apps > Copyota, tap the ⋮ menu, choose **Allow restricted settings**, and try again.
 
