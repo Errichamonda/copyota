@@ -8,9 +8,9 @@ Copy on your Android phone, paste on your Mac, on any network. No app to open an
 Android app  --HTTPS POST-->  Cloudflare Worker  --WebSocket-->  Mac agent  -->  clipboard
 ```
 
-Text is encrypted with AES-256-GCM on the phone and decrypted on the Mac. The Worker only relays ciphertext and stores nothing.
+Text and images are encrypted with AES-256-GCM on the phone and decrypted on the Mac. The Worker only relays ciphertext and stores nothing.
 
-Android blocks background apps from reading the clipboard, so the app is an accessibility service that watches Android's own "copied" preview overlay. Short text comes straight from the preview. Text of 500+ characters and hidden text, like passwords from a password manager, need a real read, which briefly takes window focus.
+Android blocks background apps from reading the clipboard, so the app is an accessibility service that watches Android's own "copied" preview overlay. Short text comes straight from the preview. Text of 500+ characters, hidden text like passwords from a password manager, and images need a real read, which briefly takes window focus. Images are sent in chunks of about 600 KB, so they arrive at full quality, and the Mac puts them back together.
 
 ## Setup
 
@@ -25,8 +25,8 @@ Everyone runs their own relay on their own free Cloudflare account, so installs 
 
 ## Limits
 
-- Text only, and phone to Mac only. Images are skipped.
+- Text and images, and phone to Mac only. Images over 10 MB are skipped.
 - Depends on Android's clipboard overlay. Phones that replace or disable it won't detect copies.
 - Copies made while the Mac is asleep or either side is offline are dropped.
-- Long or hidden copies show "Copyota pasted from your clipboard" and may close the keyboard. Turn off **Show clipboard access** in Settings > Privacy to hide the message, though that hides it for every app.
+- Long or hidden copies and images show "Copyota pasted from your clipboard" and may close the keyboard. Turn off **Show clipboard access** in Settings > Privacy to hide the message, though that hides it for every app.
 - Anyone with your QR code or `~/.config/copyota/env` can read and send clips. To replace the key, delete `~/.config/copyota`, run `./copyota setup`, and scan the new code.

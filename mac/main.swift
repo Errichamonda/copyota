@@ -52,17 +52,54 @@ guard let relay = config["URL"], let room = config["ROOM"],
 let key = SymmetricKey(data: keyData)
 let url = URL(string: relay.replacingOccurrences(of: "http", with: "ws") + "/" + room)!
 
+// Messages are a type byte plus a body: 0 is text, 1 is one chunk of an image.
+// An image chunk is an 8-byte transfer id, its index, the chunk count, then the bytes.
+struct Transfer {
+    var started = Date()
+    var chunks: [Int: Data] = [:]
+}
+var transfers: [Data: Transfer] = [:]
+
+func receiveImage(_ body: Data) {
+    guard body.count > 10 else { return }
+    let head = [UInt8](body.prefix(10))
+    let id = Data(head[0..<8]), index = Int(head[8]), total = Int(head[9])
+    guard total > 0, total <= 32, index < total else { return }
+
+    // ponytail: a stalled transfer is only dropped when the next chunk arrives.
+    transfers = transfers.filter { Date().timeIntervalSince($0.value.started) < 30 }
+    transfers[id, default: Transfer()].chunks[index] = Data(body.dropFirst(10))
+    guard let done = transfers[id], done.chunks.count == total else { return }
+    transfers[id] = nil
+
+    let bytes = (0..<total).reduce(Data()) { $0 + done.chunks[$1]! }
+    guard let image = NSImage(data: bytes) else {
+        print("ignored an image that didn't decode")
+        return
+    }
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.writeObjects([image])
+}
+
 func paste(_ message: URLSessionWebSocketTask.Message) {
     guard case .string(let body) = message,
           let sealed = Data(base64Encoded: body),
           let box = try? AES.GCM.SealedBox(combined: sealed),
           let plain = try? AES.GCM.open(box, using: key),
-          let text = String(data: plain, encoding: .utf8) else {
+          let type = plain.first else {
         print("ignored a message that failed to decrypt")
         return
     }
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(text, forType: .string)
+    switch type {
+    case 0:
+        guard let text = String(data: plain.dropFirst(), encoding: .utf8) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    case 1:
+        receiveImage(Data(plain.dropFirst()))
+    default:
+        print("ignored a message of unknown type \(type)")
+    }
 }
 
 // A sleeping Mac or a changed network leaves a dead socket that never errors,
