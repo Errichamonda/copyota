@@ -1,5 +1,5 @@
 #!/bin/bash
-# Usage: ./copyota setup | pair | uninstall | apk
+# Usage: ./copyota setup | pair | status | uninstall | apk
 set -eu
 cd "$(dirname "$0")"
 LABEL=com.copyota
@@ -95,6 +95,31 @@ setup() {
   pair
 }
 
+# Exits non-zero if anything is down. The relay keeps no state, so the phone's side can't be checked from here.
+status() {
+  [ -f "$CONFIG" ] && . "$CONFIG"
+  [ -n "${URL:-}" ] || { echo "not set up yet, run ./copyota setup" >&2; exit 1; }
+  local pid=$(launchctl print gui/$UID/$LABEL 2>/dev/null | awk '$1 == "pid" {print $3; exit}')
+  local down=0
+  # lsof can't see URLSession's socket, netstat can.
+  if [ -z "$pid" ]; then
+    echo "Mac agent: stopped, run ./copyota setup"
+    down=1
+  elif netstat -anv -p tcp | grep -Eq "ESTABLISHED.*:$pid "; then
+    echo "Mac agent: connected"
+  else
+    echo "Mac agent: running but not connected, see /tmp/copyota.log"
+    down=1
+  fi
+  if curl -fsS -o /dev/null --max-time 5 "$URL/pair" 2>/dev/null; then
+    echo "Relay: up at $URL"
+  else
+    echo "Relay: unreachable at $URL"
+    down=1
+  fi
+  return $down
+}
+
 uninstall() {
   launchctl bootout gui/$UID/$LABEL 2>/dev/null || true
   rm -f "$PLIST"
@@ -105,6 +130,6 @@ uninstall() {
 apk() { android/build.sh; }
 
 case ${1:-} in
-  setup|pair|uninstall|apk) "$1" ;;
-  *) echo "usage: $0 setup|pair|uninstall|apk" >&2; exit 1 ;;
+  setup|pair|status|uninstall|apk) "$1" ;;
+  *) echo "usage: $0 setup|pair|status|uninstall|apk" >&2; exit 1 ;;
 esac

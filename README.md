@@ -21,7 +21,7 @@ Everyone runs their own relay on their own free Cloudflare account, so installs 
 3. Scan the QR code with the phone's camera, open the link, tap **Open Copyota** and confirm. If you can't scan it, tap **Enter pairing link** in the app and paste the link printed under the code. Run `./copyota pair` to show both again.
 4. On the phone, open Settings > Accessibility > Copyota and turn it on. If Android says the setting is restricted, open Settings > Apps > Copyota, tap the ⋮ menu, choose **Allow restricted settings**, and try again.
 
-`./copyota uninstall` stops the Mac agent. Its log is `/tmp/copyota.log`, and your settings are in `~/.config/copyota/env`.
+`./copyota status` shows whether the Mac agent is connected and the relay is up. `./copyota uninstall` stops the Mac agent. Its log is `/tmp/copyota.log`, and your settings are in `~/.config/copyota/env`.
 
 ## Limits
 
