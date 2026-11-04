@@ -1,0 +1,12 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.copyota">
+  <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="36"/>
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <queries><package android:name="com.android.systemui"/></queries>
+  <application android:label="Copyota" android:allowBackup="false">
+    <service android:name=".ClipService" android:exported="true" android:label="Copyota"
+        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+      <intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter>
+      <meta-data android:name="android.accessibilityservice" android:resource="@xml/service"/>
+    </service>
+  </application>
+</manifest>

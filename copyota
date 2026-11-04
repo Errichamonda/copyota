@@ -1,0 +1,72 @@
+#!/bin/bash
+# Usage: ./copyota setup | build | install | uninstall
+set -eu
+cd "$(dirname "$0")"
+LABEL=com.copyota
+PLIST=~/Library/LaunchAgents/$LABEL.plist
+
+load_env() {
+  [ -f .env ] || (umask 077; printf 'ROOM=%s\nKEY=%s\n' "$(openssl rand -hex 16)" "$(openssl rand -base64 32)" > .env)
+  . ./.env
+}
+
+deploy() {
+  load_env
+  local url
+  url=$(cd worker && npx -y wrangler@4 deploy | tee /dev/stderr | grep -oE 'https://[^ ]+\.workers\.dev' | head -1)
+  [ -n "$url" ] || { echo "no workers.dev URL in wrangler's output" >&2; exit 1; }
+  sed -i '' '/^URL=/d' .env
+  echo "URL=$url" >> .env
+}
+
+build() {
+  load_env
+  [ -n "${URL:-}" ] || { echo "no relay URL yet, run ./copyota setup" >&2; exit 1; }
+  local sdk=${ANDROID_HOME:-~/Library/Android/sdk}
+  local jar=$(ls -d "$sdk"/platforms/android-* | sort -V | tail -1)/android.jar
+  local tools=$(ls -d "$sdk"/build-tools/* | sort -V | tail -1)
+  rm -rf build && mkdir -p build/gen/com/copyota build/classes
+
+  printf 'enum Config {\n  static let url = "%s"\n  static let room = "%s"\n  static let key = "%s"\n}\n' "$URL" "$ROOM" "$KEY" > build/Config.swift
+  swiftc -O mac/main.swift build/Config.swift -o build/copyota-mac
+
+  printf 'package com.copyota;\nclass Config {\n  static final String URL = "%s", ROOM = "%s", KEY = "%s";\n}\n' "$URL" "$ROOM" "$KEY" > build/gen/com/copyota/Config.java
+  "$tools/aapt2" compile --dir android/res -o build/res.zip
+  "$tools/aapt2" link -I "$jar" --manifest android/AndroidManifest.xml --java build/gen -o build/app.apk build/res.zip
+  javac -nowarn -Xlint:-options --release 8 -cp "$jar" -d build/classes $(find android/src build/gen -name '*.java')
+  "$tools/d8" --lib "$jar" --min-api 33 --output build $(find build/classes -name '*.class')
+  (cd build && zip -q app.apk classes.dex)
+  "$tools/zipalign" -f 4 build/app.apk build/aligned.apk
+  "$tools/apksigner" sign --ks ~/.android/debug.keystore --ks-pass pass:android --out build/copyota.apk build/aligned.apk
+  echo "built build/copyota.apk, it contains your key so don't share it"
+}
+
+install() {
+  mkdir -p ~/Library/LaunchAgents
+  cat > "$PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$LABEL</string>
+  <key>ProgramArguments</key><array><string>$PWD/build/copyota-mac</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/copyota.log</string>
+  <key>StandardErrorPath</key><string>/tmp/copyota.log</string>
+</dict></plist>
+PLIST
+  launchctl bootout gui/$UID/$LABEL 2>/dev/null || true
+  launchctl bootstrap gui/$UID "$PLIST"
+  echo "Mac side running"
+}
+
+uninstall() {
+  launchctl bootout gui/$UID/$LABEL 2>/dev/null || true
+  rm -f "$PLIST"
+}
+
+case ${1:-} in
+  setup) deploy; build; install ;;
+  build|install|uninstall) "$1" ;;
+  *) echo "usage: $0 setup|build|install|uninstall" >&2; exit 1 ;;
+esac
