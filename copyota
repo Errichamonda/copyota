@@ -36,6 +36,7 @@ deploy() {
 }
 
 build() {
+  [ "$BIN" -nt mac/main.swift ] && return # releases come with the agent already built
   command -v swiftc >/dev/null || { echo "Install Xcode's command line tools with: xcode-select --install" >&2; exit 1; }
   mkdir -p build
   swiftc -O mac/main.swift -o "$BIN"
