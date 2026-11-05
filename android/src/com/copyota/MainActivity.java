@@ -1,9 +1,11 @@
 package com.copyota;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
 import android.net.Uri;
@@ -19,7 +21,7 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
-// Receives the copyota://pair link from the pairing QR page, or the same link pasted by hand, and shows the two setup steps.
+// Receives the copyota://pair link from the pairing QR page, or the same link pasted by hand, and shows the setup steps.
 public class MainActivity extends Activity {
     static final java.util.Random RANDOM = new java.util.Random();
     static final RenderEffect BLUR = RenderEffect.createBlurEffect(16, 16, Shader.TileMode.CLAMP);
@@ -38,6 +40,7 @@ public class MainActivity extends Activity {
             return false;
         });
         findViewById(R.id.manual).setOnClickListener(v -> askForLink());
+        findViewById(R.id.screenshots).setOnClickListener(v -> requestPermissions(new String[] {Manifest.permission.READ_MEDIA_IMAGES}, 0));
         View hero = findViewById(R.id.hero);
         hero.setScaleX(.5f);
         hero.setScaleY(.5f);
@@ -74,6 +77,16 @@ public class MainActivity extends Activity {
         }
         step(R.id.service, 2, "Turn on Copyota", running,
                 running ? "Watching for copies." : "Switch it on in Settings > Accessibility > Copyota.");
+        boolean photos = checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED;
+        step(R.id.screenshots, 3, "Send screenshots", photos,
+                photos ? "New screenshots go to your Mac." : "Tap to allow access to all photos.");
+    }
+
+    // After repeated denials Android stops showing the dialog, so the setting is the only way left.
+    @Override public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
+        if (results.length > 0 && results[0] != PackageManager.PERMISSION_GRANTED
+                && !shouldShowRequestPermissionRationale(Manifest.permission.READ_MEDIA_IMAGES))
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
     }
 
     // Blurred state shows random characters of the same length, so the blur alone never has to hide the real text.

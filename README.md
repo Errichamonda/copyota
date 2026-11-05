@@ -12,6 +12,8 @@ Text and images are encrypted with AES-256-GCM on the phone and decrypted on the
 
 Android blocks background apps from reading the clipboard, so the app is an accessibility service that watches Android's own "copied" preview overlay. Short text comes straight from the preview. Text of 500+ characters, hidden text like passwords from a password manager, and images need a real read, which briefly takes window focus. Images are sent in chunks of about 600 KB, so they arrive at full quality, and the Mac puts them back together.
 
+Screenshots never reach Android's clipboard, so the app watches for new ones in the photo library instead. Tap **Send screenshots** in the app and allow access to all photos to turn this on. Every new screenshot then replaces your Mac's clipboard, including any of sensitive screens. To stop, remove the Photos permission in Settings > Apps > Copyota.
+
 ## Setup
 
 Everyone runs their own relay on their own free Cloudflare account, so installs never see each other. Needs Android 13+, and macOS 13+ and Node on the Mac.
