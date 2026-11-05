@@ -1,3 +1,3 @@
 <resources>
-  <string name="description">Watches for Android\'s clipboard preview and sends copied text, encrypted, to your Mac.</string>
+  <string name="description">Watches for Android\'s clipboard preview and sends copied text and images, plus new screenshots, encrypted, to your Mac.</string>
 </resources>

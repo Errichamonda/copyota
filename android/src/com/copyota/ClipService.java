@@ -3,12 +3,17 @@ package com.copyota;
 import android.accessibilityservice.AccessibilityService;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ContentUris;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.database.ContentObserver;
+import android.database.Cursor;
 import android.graphics.PixelFormat;
 import android.net.Uri;
+import android.os.Handler;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
 import android.view.Gravity;
@@ -34,6 +39,7 @@ import javax.crypto.spec.SecretKeySpec;
 // Background apps can't read the clipboard, but Android 13+ shows a preview overlay on every
 // copy and accessibility services can see it. Short text is taken from the preview. Previews
 // that are cut off or hidden, and images, need a real read, which requires briefly holding window focus.
+// Screenshots never reach the clipboard, so they're picked up from MediaStore instead.
 //
 // Every message is encrypted as one type byte plus a body. An image is split into chunks that fit
 // the relay's message limit: TYPE_IMAGE, 8-byte transfer id, chunk index, chunk count, bytes.
@@ -49,9 +55,43 @@ public class ClipService extends AccessibilityService {
     static final int MAX_IMAGE_BYTES = 10 << 20;
     static final int PREVIEW_LIMIT = 500;
     static final long REPEAT_MS = 2000;
+    static final long SCREENSHOT_MAX_AGE_S = 30; // edits and rescans also fire for old screenshots
 
     String lastPreview = "";
     long lastAt;
+    long lastScreenshot;
+    ContentObserver screenshots;
+
+    // Without the photos permission the query just finds nothing, so this is safe to register regardless.
+    @Override public void onCreate() {
+        super.onCreate();
+        screenshots = new ContentObserver(new Handler(getMainLooper())) {
+            @Override public void onChange(boolean selfChange) { sendNewScreenshots(); }
+        };
+        getContentResolver().registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, screenshots);
+    }
+
+    // Rebinding makes a new instance in the same process, so a leftover observer would send every screenshot twice.
+    @Override public void onDestroy() {
+        getContentResolver().unregisterContentObserver(screenshots);
+        super.onDestroy();
+    }
+
+    // Fires several times per screenshot. Files still being written are left out of queries by default.
+    void sendNewScreenshots() {
+        Uri images = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+        String since = String.valueOf(System.currentTimeMillis() / 1000 - SCREENSHOT_MAX_AGE_S);
+        try (Cursor found = getContentResolver().query(images, new String[] {MediaStore.Images.Media._ID},
+                MediaStore.Images.Media.RELATIVE_PATH + " LIKE '%Screenshots/%' AND " + MediaStore.Images.Media.DATE_ADDED + " > ?",
+                new String[] {since}, MediaStore.Images.Media._ID)) {
+            while (found != null && found.moveToNext()) {
+                long id = found.getLong(0);
+                if (id <= lastScreenshot) continue;
+                lastScreenshot = id;
+                sendImage(ContentUris.withAppendedId(images, id));
+            }
+        }
+    }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         AccessibilityNodeInfo root = event.getSource();

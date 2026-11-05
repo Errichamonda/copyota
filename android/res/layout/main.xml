@@ -18,6 +18,8 @@
     <include android:id="@+id/pair" layout="@layout/step"/>
     <include android:id="@+id/service" layout="@layout/step" android:layout_width="match_parent"
         android:layout_height="wrap_content" android:layout_marginTop="12dp"/>
+    <include android:id="@+id/screenshots" layout="@layout/step" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginTop="12dp"/>
     <TextView android:id="@+id/settings" android:layout_width="match_parent" android:layout_height="64dp"
         android:layout_marginTop="24dp" android:background="@drawable/button" android:clickable="true"
         android:focusable="true" android:gravity="center" android:text="Open accessibility settings"
