@@ -124,7 +124,7 @@ public class MainActivity extends Activity {
                 .setPositiveButton("Continue", (d, w) -> {
                     // Whitespace is stripped because a link copied from a terminal can arrive wrapped.
                     Uri page = Uri.parse(input.getText().toString().replaceAll("\\s", ""));
-                    offer(Uri.parse("copyota://pair?url=" + Uri.encode(page.getScheme() + "://" + page.getHost()) + "&" + page.getEncodedFragment()));
+                    offer(Uri.parse("copyota://pair?url=" + Uri.encode(page.getScheme() + "://" + page.getEncodedAuthority()) + "&" + page.getEncodedFragment()));
                 })
                 .setNegativeButton("Cancel", null)
                 .create();
@@ -138,7 +138,7 @@ public class MainActivity extends Activity {
         if (link == null) return;
         String url = link.getQueryParameter("url"), room = link.getQueryParameter("room"), key = link.getQueryParameter("key");
         try {
-            if (url == null || !url.matches("https://[A-Za-z0-9.-]+")
+            if (url == null || !url.matches("https://[A-Za-z0-9.-]+(:[0-9]+)?")
                     || room == null || !room.matches("[0-9a-f]{32}")
                     || key == null || Base64.decode(key, Base64.DEFAULT).length != 32) throw new IllegalArgumentException();
         } catch (IllegalArgumentException e) {

@@ -5,10 +5,10 @@
 Copy on your Android phone, paste on your Mac, on any network. No app to open and no cable.
 
 ```
-Android app  --HTTPS POST-->  Cloudflare Worker  --WebSocket-->  Mac agent  -->  clipboard
+Android app  --HTTPS POST-->  relay  --WebSocket-->  Mac agent  -->  clipboard
 ```
 
-Text and images are encrypted with AES-256-GCM on the phone and decrypted on the Mac. The Worker only relays ciphertext and stores nothing.
+Text and images are encrypted with AES-256-GCM on the phone and decrypted on the Mac. The relay is a Cloudflare Worker or [your own server](#self-hosting). It only passes on ciphertext and stores nothing.
 
 Android blocks background apps from reading the clipboard, so the app is an accessibility service that watches Android's own "copied" preview overlay. Short text comes straight from the preview. Text of 500+ characters, hidden text like passwords from a password manager, and images need a real read, which briefly takes window focus. Images are sent in chunks of about 600 KB, so they arrive at full quality, and the Mac puts them back together.
 
@@ -16,7 +16,7 @@ Screenshots never reach Android's clipboard, so the app watches for new ones in 
 
 ## Setup
 
-Everyone runs their own relay on their own free Cloudflare account, so installs never see each other. Needs Android 13+, and macOS 13+ and Node on the Mac.
+Everyone runs their own relay on their own free Cloudflare account, or [on their own server](#self-hosting), so installs never see each other. Needs Android 13+, and macOS 13+ on the Mac, plus Node for the Cloudflare relay.
 
 1. On the Mac, download the latest release and run setup. Keep the folder, the Mac agent runs from it.
 
@@ -31,6 +31,21 @@ Everyone runs their own relay on their own free Cloudflare account, so installs 
 4. On the phone, open Settings > Accessibility > Copyota and turn it on. If Android says the setting is restricted, open Settings > Apps > Copyota, tap the ⋮ menu, choose **Allow restricted settings**, and try again.
 
 `./copyota status` shows whether the Mac agent is connected and the relay is up. `./copyota uninstall` stops the Mac agent. Its log is `/tmp/copyota.log`, and your settings are in `~/.config/copyota/env`.
+
+## Self-hosting
+
+To skip Cloudflare, run the relay on any server with a domain name pointing at it and ports 80 and 443 open. It needs Docker, and [Caddy](https://caddyserver.com) gets the HTTPS certificate for you.
+
+```
+git clone https://github.com/Errichamonda/copyota.git
+cd copyota/worker && DOMAIN=relay.example.com docker compose up -d
+```
+
+Then on the Mac, run `./copyota setup https://relay.example.com` instead of plain `./copyota setup`, and carry on from step 2. It skips Cloudflare and Node entirely. If you already paired with another relay, scan the new code to move the phone over. To go back to Cloudflare, delete the `URL=` line from `~/.config/copyota/env` and run `./copyota setup`.
+
+Without Docker, `deno run --allow-net worker/selfhost.js` serves plain HTTP on port 8080 for your own HTTPS proxy, such as nginx or `tailscale serve --bg 8080`. Keep port 8080 itself closed to the internet.
+
+The relay needs a certificate the phone trusts, so a self-signed one won't work, and the phone refuses plain HTTP because anyone on the network could tamper with the pairing page and steal your key. A relay on a port other than 443 needs Copyota newer than v0.2.1. Anyone who finds a self-hosted relay can send messages through it, but they can't read or forge your clips without your room ID and key.
 
 ## Limits
 

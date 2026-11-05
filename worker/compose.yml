@@ -1,0 +1,20 @@
+# The self-hosted relay with automatic HTTPS, see the README.
+# Run it with: DOMAIN=relay.example.com docker compose up -d
+services:
+  relay:
+    image: denoland/deno:alpine-2.9.8
+    command: run --allow-net /app/selfhost.js
+    volumes:
+      - .:/app:ro
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    command: caddy reverse-proxy --from ${DOMAIN:?set DOMAIN to your relay's domain} --to relay:8080
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - caddy:/data
+    restart: unless-stopped
+volumes:
+  caddy:
