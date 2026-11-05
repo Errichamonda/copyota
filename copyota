@@ -1,5 +1,5 @@
 #!/bin/bash
-# Usage: ./copyota setup | pair | status | uninstall | apk
+# Usage: ./copyota setup [https://your-relay] | pair | status | uninstall | apk
 set -eu
 cd "$(dirname "$0")"
 LABEL=com.copyota
@@ -31,8 +31,20 @@ deploy() {
   URL=$(grep -oE 'https://[A-Za-z0-9.-]+\.workers\.dev' "$out" | head -1 || true)
   rm -f "$out"
   [ -n "$URL" ] || { echo "wrangler didn't report a workers.dev URL, so the deploy may have failed" >&2; exit 1; }
+  save_url
+}
+
+save_url() {
   sed -i '' '/^URL=/d' "$CONFIG"
   echo "URL=$URL" >> "$CONFIG"
+}
+
+# Uses a relay the user hosts themselves. The phone only accepts https, see the README.
+use_relay() {
+  URL=${1%/}
+  [[ $URL =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || { echo "the relay must look like https://relay.example.com" >&2; exit 1; }
+  curl -fsS -o /dev/null "$URL/pair" || { echo "no relay answered at $URL" >&2; exit 1; }
+  save_url
 }
 
 build() {
@@ -90,7 +102,11 @@ setup() {
     (umask 077; printf 'ROOM=%s\nKEY=%s\n' "$(openssl rand -hex 16)" "$(openssl rand -base64 32)" > "$CONFIG")
   fi
   . "$CONFIG"
-  deploy
+  # Running setup again without a URL stays on the self-hosted relay.
+  case ${1:-${URL:-}} in
+    ""|*.workers.dev) deploy ;;
+    *) use_relay "${1:-$URL}" ;;
+  esac
   build
   install
   pair
@@ -125,12 +141,12 @@ uninstall() {
   launchctl bootout gui/$UID/$LABEL 2>/dev/null || true
   rm -f "$PLIST"
   echo "Mac agent stopped. Your key is still in $CONFIG."
-  echo "To remove the relay too, run: cd worker && npx wrangler@4 delete"
+  echo "To remove a Cloudflare relay too, run: cd worker && npx wrangler@4 delete"
 }
 
 apk() { android/build.sh; }
 
 case ${1:-} in
-  setup|pair|status|uninstall|apk) "$1" ;;
-  *) echo "usage: $0 setup|pair|status|uninstall|apk" >&2; exit 1 ;;
+  setup|pair|status|uninstall|apk) "$@" ;;
+  *) echo "usage: $0 setup [https://your-relay]|pair|status|uninstall|apk" >&2; exit 1 ;;
 esac
